@@ -13,16 +13,13 @@ func main() {
 		log.Fatalf("Error when starting audio: ", err.Error())
 	}
 
-	log.Println("waiting for data")
-
 outer:
 	for {
 		select {
-		case data, ok := <-channel:
+		case _, ok := <-channel:
 			if !ok {
 				break outer
 			}
-			log.Println(data)
 		}
 	}
 }

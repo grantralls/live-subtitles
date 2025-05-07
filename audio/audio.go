@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/gordonklaus/portaudio"
@@ -32,6 +33,7 @@ func StartRecordingDefaultInput() (<-chan []byte, error) {
 
 	go func() {
 		stream.Start()
+		fmt.Println("Press ENTER to quit...")
 		os.Stdin.Read([]byte{0})
 		stream.Stop()
 		portaudio.Terminate()
