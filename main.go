@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
+	"github.com/go-gst/go-gst/gst/app"
 
 	"github.com/grantralls/live-transcription/audio"
 	"github.com/grantralls/live-transcription/aws"
@@ -49,10 +49,20 @@ type Vehicle interface {
 
 func main() {
 
+	// data := []byte("Hello there!")
+
 	// run()
-	// gst.Init(nil)
-	// mainLoop := glib.NewMainLoop(glib.MainContextDefault(), false)
-	//
+	gst.Init(nil)
+	mainLoop := glib.NewMainLoop(glib.MainContextDefault(), false)
+
+	appSrc, err := gst.NewElement("appsrc")
+	checkError("Error when creating appSrc: %v", err)
+
+	src := app.SrcFromElement(appSrc)
+	if src == nil {
+		log.Fatalf("appSrc is not an appsrc element")
+	}
+
 	// videosrc, err := gst.NewElement("v4l2src")
 	// checkError("Error when creating video test source: %v", err)
 	//
@@ -69,20 +79,25 @@ func main() {
 	//
 	// autoVideoSink, err := gst.NewElement("autovideosink")
 	// checkError("Error when creating video sink: %v", err)
-	//
-	// pipeline, err := gst.NewPipeline("pipeline")
-	// checkError("Error when creating a new pipeline: %v", err)
-	//
-	// pipeline.GetBus().AddWatch(messageHandler)
-	// err = pipeline.AddMany(videosrc, videoConvert, capsFilter, textOverlay, autoVideoSink)
-	// checkError("Error when adding many: %v", err)
-	//
-	// err = gst.ElementLinkMany(videosrc, videoConvert, capsFilter, textOverlay, autoVideoSink)
-	// checkError("Error when linking many: %v", err)
-	//
-	// err = pipeline.SetState(gst.StatePlaying)
-	// checkError("Error when setting state: %v", err)
-	// mainLoop.Run()
+
+	pipeline, err := gst.NewPipeline("pipeline")
+	checkError("Error when creating a new pipeline: %v", err)
+
+	ok := pipeline.GetBus().AddWatch(messageHandler)
+	if !ok {
+		log.Fatalf("failed to add watch to pipeline")
+	}
+
+	fakeSink, _ := gst.NewElement("fakesink")
+	err = pipeline.AddMany(appSrc, fakeSink)
+	checkError("Error when adding many: %v", err)
+
+	err = gst.ElementLinkMany(appSrc, fakeSink)
+	checkError("Error when linking many: %v", err)
+
+	err = pipeline.SetState(gst.StatePlaying)
+	checkError("Error when setting state: %v", err)
+	mainLoop.Run()
 }
 
 func messageHandler(msg *gst.Message) bool {
