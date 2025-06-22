@@ -1,15 +1,133 @@
+// This example shows how to use the appsrc element.
+//
+// Also see: https://gstreamer.freedesktop.org/documentation/tutorials/basic/short-cutting-the-pipeline.html?gi-language=c
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 
-	"github.com/go-gst/go-glib/glib"
-	"github.com/go-gst/go-gst/gst"
-	"github.com/go-gst/go-gst/gst/app"
-
+	"github.com/go-gst/go-gst/pkg/gst"
+	"github.com/go-gst/go-gst/pkg/gstapp"
 	"github.com/grantralls/live-transcription/audio"
 	"github.com/grantralls/live-transcription/aws"
 )
+
+const width = 320
+const height = 240
+
+func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
+	println("Creating pipeline")
+	gst.Init()
+
+	// Create a pipeline
+	pipeline := gst.NewPipeline("").(gst.Pipeline)
+
+	src := gst.ElementFactoryMake("appsrc", "").(gstapp.AppSrc)
+	textrender := gst.ElementFactoryMake("textrender", "")
+	conv := gst.ElementFactoryMake("videoconvert", "")
+	sink := gst.ElementFactoryMake("autovideosink", "")
+
+	// Add the elements to the pipeline and link them
+	pipeline.AddMany(src, textrender, conv, sink)
+	gst.LinkMany(src, textrender, conv, sink)
+
+	// Specify the format we want to provide as application into the pipeline
+	// by creating a video info with the given format and creating caps from it for the appsrc element.
+	// videoInfo := gstvideo.NewVideoInfo()
+	//
+	// ok := videoInfo.SetFormat(gstvideo.VideoFormatRGBA, width, height)
+	//
+	// if !ok {
+	// 	return nil, fmt.Errorf("failed to set video format")
+	// }
+	//
+	// videoInfo.SetFramerate(2, 1)
+	//
+	// caps := videoInfo.ToCaps()
+
+	caps := gst.CapsFromString("text/x-raw, format=(string)pango-markup")
+
+	fmt.Println("Caps:", caps.String())
+
+	src.SetObjectProperty("caps", caps)
+	src.SetObjectProperty("format", gst.FormatTime)
+
+	// Initialize a frame counter
+	var i int
+
+	// Since our appsrc element operates in pull mode (it asks us to provide data),
+	// we add a handler for the need-data callback and provide new data from there.
+	// In our case, we told gstreamer that we do 2 frames per second. While the
+	// buffers of all elements of the pipeline are still empty, this will be called
+	// a couple of times until all of them are filled. After this initial period,
+	// this handler will be called (on average) twice per second.
+
+	src.ConnectNeedData(func(self gstapp.AppSrc, _ uint) {
+		fmt.Println("Producing frame:", i)
+
+		data := <-dataSrc
+
+		// Create a buffer that can hold exactly one video RGBA frame.
+		buffer := gst.NewBufferAllocate(nil, uint(len(data)), nil)
+
+		// For each frame we produce, we set the timestamp when it should be displayed
+		// The autovideosink will use this information to display the frame at the right time.
+
+		// At this point, buffer is only a reference to an existing memory region somewhere.
+		// When we want to access its content, we have to map it while requesting the required
+		// mode of access (read, read/write).
+		// See: https://gstreamer.freedesktop.org/documentation/plugin-development/advanced/allocation.html
+		mapped, ok := buffer.Map(gst.MapWrite)
+		if !ok {
+			panic("Failed to map buffer")
+		}
+		_, err := mapped.Write(data)
+		if err != nil {
+			println("Failed to write to buffer:", err)
+			panic("Failed to write to buffer")
+		}
+
+		mapped.Unmap()
+
+		// Push the buffer onto the pipeline.
+		self.PushBuffer(buffer)
+
+		i++
+	})
+
+	return pipeline, nil
+}
+
+func mainLoop(pipeline gst.Pipeline) error {
+	// Start the pipeline
+
+	pipeline.SetState(gst.StatePlaying)
+
+	for msg := range pipeline.GetBus().Messages(context.Background()) {
+		switch msg.Type() {
+		case gst.MessageEos:
+			return nil
+		case gst.MessageError:
+			debug, gerr := msg.ParseError()
+			if debug != "" {
+				fmt.Println(gerr.Error(), debug)
+			}
+			return gerr
+		default:
+			fmt.Println(msg)
+		}
+
+		pipeline.DebugBinToDotFileWithTs(gst.DebugGraphShowVerbose, "pipeline")
+	}
+
+	return fmt.Errorf("unexpected end of messages without EOS")
+}
+
+func main() {
+	run()
+}
 
 func run() {
 	audioDataChan, err := audio.StartRecordingDefaultInput()
@@ -21,6 +139,21 @@ func run() {
 	sender, stream := aws.StartStream()
 	results := stream.Events()
 	defer stream.Close()
+	rawText := make(chan []byte)
+
+	go func() {
+		pipeline, err := createPipeline(rawText)
+		if err != nil {
+			fmt.Println("Error creating pipeline:", err)
+			return
+		}
+
+		err = mainLoop(pipeline)
+
+		if err != nil {
+			fmt.Println("Error running pipeline:", err)
+		}
+	}()
 
 outer:
 	for {
@@ -37,79 +170,8 @@ outer:
 		case transcriptionResult := <-results:
 			transcript := aws.GetTranscript(transcriptionResult)
 			if transcript != nil {
-				log.Println(*transcript)
+				rawText <- []byte(*transcript)
 			}
 		}
-	}
-}
-
-type Vehicle interface {
-	Vroom()
-}
-
-func main() {
-
-	// data := []byte("Hello there!")
-
-	// run()
-	gst.Init(nil)
-	mainLoop := glib.NewMainLoop(glib.MainContextDefault(), false)
-
-	appSrc, err := gst.NewElement("appsrc")
-	checkError("Error when creating appSrc: %v", err)
-
-	src := app.SrcFromElement(appSrc)
-	if src == nil {
-		log.Fatalf("appSrc is not an appsrc element")
-	}
-
-	// videosrc, err := gst.NewElement("v4l2src")
-	// checkError("Error when creating video test source: %v", err)
-	//
-	// videoConvert, err := gst.NewElement("videoconvert")
-	// checkError("Error when creating videoconvert: %v", err)
-	//
-	// capsFilter, err := gst.NewElement("capsfilter")
-	// checkError("Error when creating capsFilter: %v", err)
-	// capsFilter.SetArg("caps", "video/x-raw,width=1920,height=1080")
-	//
-	// textOverlay, err := gst.NewElement("textoverlay")
-	// checkError("Error when creating textOverlay: %v", err)
-	// textOverlay.SetArg("text", "Hello there!!")
-	//
-	// autoVideoSink, err := gst.NewElement("autovideosink")
-	// checkError("Error when creating video sink: %v", err)
-
-	pipeline, err := gst.NewPipeline("pipeline")
-	checkError("Error when creating a new pipeline: %v", err)
-
-	ok := pipeline.GetBus().AddWatch(messageHandler)
-	if !ok {
-		log.Fatalf("failed to add watch to pipeline")
-	}
-
-	fakeSink, _ := gst.NewElement("fakesink")
-	err = pipeline.AddMany(appSrc, fakeSink)
-	checkError("Error when adding many: %v", err)
-
-	err = gst.ElementLinkMany(appSrc, fakeSink)
-	checkError("Error when linking many: %v", err)
-
-	err = pipeline.SetState(gst.StatePlaying)
-	checkError("Error when setting state: %v", err)
-	mainLoop.Run()
-}
-
-func messageHandler(msg *gst.Message) bool {
-	if msg != nil {
-		log.Printf("%+v\n", msg)
-	}
-
-	return true
-}
-
-func checkError(msg string, err error) {
-	if err != nil {
-		log.Fatalf(msg, err)
 	}
 }

@@ -5,10 +5,13 @@ go 1.24.2
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/service/transcribestreaming v1.25.3
-	github.com/go-gst/go-glib v1.4.0
 	github.com/go-gst/go-gst v1.4.0
 	github.com/gordonklaus/portaudio v0.0.0-20250206071425-98a94950218b
 )
+
+replace github.com/go-gst/go-gst v1.4.0 => ../go-gst
+
+replace github.com/diamondburned/gotk4 => github.com/rswilli/gotk4 v0.0.0-20250620133050-573090fa4d6a
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
@@ -24,6 +27,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.19 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
-	github.com/mattn/go-pointer v0.0.1 // indirect
-	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
+	github.com/diamondburned/gotk4 v0.3.1 // indirect
+	golang.org/x/sync v0.8.0 // indirect
 )
