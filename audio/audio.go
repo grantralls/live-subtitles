@@ -3,7 +3,6 @@ package audio
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/gordonklaus/portaudio"
@@ -51,17 +50,17 @@ func StartRecordingDefaultInput() (<-chan []byte, error) {
 // Receives a byte slice channel to forward microphone data to.
 func callbackWithChannelOutput(destination chan<- []byte) func([]int16, []int16) {
 	return func(in []int16, out []int16) {
+		// log.Println(in)
 		buf := make([]byte, len(in)*2)
 		numberOfBytesWritten, err := binary.Encode(buf, binary.LittleEndian, in)
 
 		if numberOfBytesWritten != len(in)*2 {
-			log.Println("Unexpected number of bytes")
+			panic("Unexpected number of bytes")
 			return
 		}
 
 		if err != nil {
-			log.Println("Failed to Encode microphone data into binary")
-			return
+			panic("Failed to Encode microphone data into binary")
 		}
 
 		destination <- buf

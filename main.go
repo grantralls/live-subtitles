@@ -28,24 +28,13 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	textrender := gst.ElementFactoryMake("textrender", "")
 	conv := gst.ElementFactoryMake("videoconvert", "")
 	sink := gst.ElementFactoryMake("autovideosink", "")
+	compositor := gst.ElementFactoryMake("compositor", "")
+	queue := gst.ElementFactoryMake("queue", "")
+	// videotestsrc := gst.ElementFactoryMake("videotestsrc", "")
 
 	// Add the elements to the pipeline and link them
-	pipeline.AddMany(src, textrender, conv, sink)
-	gst.LinkMany(src, textrender, conv, sink)
-
-	// Specify the format we want to provide as application into the pipeline
-	// by creating a video info with the given format and creating caps from it for the appsrc element.
-	// videoInfo := gstvideo.NewVideoInfo()
-	//
-	// ok := videoInfo.SetFormat(gstvideo.VideoFormatRGBA, width, height)
-	//
-	// if !ok {
-	// 	return nil, fmt.Errorf("failed to set video format")
-	// }
-	//
-	// videoInfo.SetFramerate(2, 1)
-	//
-	// caps := videoInfo.ToCaps()
+	pipeline.AddMany(textrender, conv, sink, compositor, queue, src)
+	gst.LinkMany(src, textrender, conv, compositor, sink)
 
 	caps := gst.CapsFromString("text/x-raw, format=(string)pango-markup")
 
@@ -53,6 +42,7 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 
 	src.SetObjectProperty("caps", caps)
 	src.SetObjectProperty("format", gst.FormatTime)
+	src.SetObjectProperty("is-live", true)
 
 	// Initialize a frame counter
 	var i int
@@ -64,10 +54,21 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	// a couple of times until all of them are filled. After this initial period,
 	// this handler will be called (on average) twice per second.
 
+	var data []byte
+	src.ConnectEnoughData(func(src gstapp.AppSrc) {
+		log.Println("Enough data!")
+	})
 	src.ConnectNeedData(func(self gstapp.AppSrc, _ uint) {
-		fmt.Println("Producing frame:", i)
 
-		data := <-dataSrc
+		log.Println("connecting need data")
+		select {
+		case textData := <-dataSrc:
+			data = textData
+		default:
+			if data == nil {
+				data = []byte("Hello there :)")
+			}
+		}
 
 		// Create a buffer that can hold exactly one video RGBA frame.
 		buffer := gst.NewBufferAllocate(nil, uint(len(data)), nil)
