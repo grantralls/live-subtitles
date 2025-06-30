@@ -6,10 +6,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/go-gst/go-gst/pkg/gst"
 	"github.com/go-gst/go-gst/pkg/gstapp"
+	"github.com/grantralls/live-transcription/audio"
 	"github.com/grantralls/live-transcription/aws"
 	"github.com/grantralls/live-transcription/gpipeline"
 )
@@ -107,13 +109,13 @@ func main() {
 }
 
 func run() {
-	// audioDataChan, err := audio.StartRecordingDefaultInput()
+	audioDataChan, err := audio.StartRecordingDefaultInput()
 
-	// if err != nil {
-	// 	log.Fatalf("Error when starting audio: %v", err)
-	// }
+	if err != nil {
+		log.Fatalf("Error when starting audio: %v", err)
+	}
 
-	_, stream := aws.StartStream()
+	sender, stream := aws.StartStream()
 	results := stream.Events()
 	defer stream.Close()
 	rawText := make(chan []byte)
@@ -132,18 +134,18 @@ func run() {
 		}
 	}()
 
-	// outer:
+outer:
 	for {
 		select {
-		// case rawAudioData, ok := <-audioDataChan:
-		// 	if !ok {
-		// 		break outer
-		// 	}
-		// 	err := sender(rawAudioData)
-		// 	if err != nil {
-		// 		log.Printf("Error when sending audio data to aws: %v", err)
-		// 		break outer
-		// 	}
+		case rawAudioData, ok := <-audioDataChan:
+			if !ok {
+				break outer
+			}
+			err := sender(rawAudioData)
+			if err != nil {
+				log.Printf("Error when sending audio data to aws: %v", err)
+				break outer
+			}
 		case transcriptionResult := <-results:
 			transcript := aws.GetTranscript(transcriptionResult)
 			if transcript != nil {

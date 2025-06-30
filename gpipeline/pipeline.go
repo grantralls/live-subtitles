@@ -66,9 +66,6 @@ func (p *Pipeline) setProperties() {
 	p.Src.SetObjectProperty("is-live", true)
 }
 
-func (p *Pipeline) requestPads() {
-}
-
 func (p *Pipeline) link() {
 	gst.LinkMany(p.Videotestsrc, p.Capsfilter2)
 	p.Capsfilter2.Link(p.Compositor)
