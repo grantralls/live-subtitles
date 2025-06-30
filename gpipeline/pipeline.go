@@ -52,11 +52,11 @@ func (p *Pipeline) init() {
 
 // Add the elements to the pipeline bin
 func (p *Pipeline) add() {
-	p.Pipeline.AddMany(p.Src, p.Textrender, p.Converter1, p.Compositor, p.Converter2, p.Sink, p.Capsfilter1, p.Capsfilter2)
+	p.Pipeline.AddMany(p.Src, p.Textrender, p.Converter1, p.Compositor, p.Converter2, p.Sink, p.Capsfilter1, p.Capsfilter2, p.Videotestsrc)
 }
 
 func (p *Pipeline) setProperties() {
-	videoCaps := gst.CapsFromString("video/x-raw,width=1020,height=436")
+	videoCaps := gst.CapsFromString("video/x-raw,width=1920,height=1080")
 	p.Capsfilter1.SetObjectProperty("caps", videoCaps)
 	p.Capsfilter2.SetObjectProperty("caps", videoCaps)
 
@@ -70,7 +70,10 @@ func (p *Pipeline) requestPads() {
 }
 
 func (p *Pipeline) link() {
-	gst.LinkMany(p.Src, p.Textrender, p.Converter1)
+	gst.LinkMany(p.Videotestsrc, p.Capsfilter2)
+	p.Capsfilter2.Link(p.Compositor)
+
+	gst.LinkMany(p.Src, p.Textrender, p.Capsfilter1, p.Converter1)
 	gst.LinkMany(p.Compositor, p.Converter2, p.Sink)
 	p.Converter1.Link(p.Compositor)
 }
