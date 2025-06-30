@@ -72,16 +72,5 @@ func (p *Pipeline) requestPads() {
 func (p *Pipeline) link() {
 	gst.LinkMany(p.Src, p.Textrender, p.Converter1)
 	gst.LinkMany(p.Compositor, p.Converter2, p.Sink)
-	requestPadTemplate := p.Compositor.GetPadTemplate("sink_%u")
-	compositorPad := p.Compositor.RequestPad(requestPadTemplate, "", nil)
-	if compositorPad == nil {
-		panic("compositor pad is nil")
-	}
-
-	converterPad := p.Converter1.GetStaticPad("src")
-	if converterPad == nil {
-		panic("converter pad is nil")
-	}
-
-	converterPad.Link(compositorPad)
+	p.Converter1.Link(p.Compositor)
 }
