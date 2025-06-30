@@ -6,12 +6,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"time"
 
 	"github.com/go-gst/go-gst/pkg/gst"
 	"github.com/go-gst/go-gst/pkg/gstapp"
-	"github.com/grantralls/live-transcription/audio"
 	"github.com/grantralls/live-transcription/aws"
+	"github.com/grantralls/live-transcription/gpipeline"
 )
 
 const width = 320
@@ -21,28 +21,7 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	println("Creating pipeline")
 	gst.Init()
 
-	// Create a pipeline
-	pipeline := gst.NewPipeline("").(gst.Pipeline)
-
-	src := gst.ElementFactoryMake("appsrc", "").(gstapp.AppSrc)
-	textrender := gst.ElementFactoryMake("textrender", "")
-	conv := gst.ElementFactoryMake("videoconvert", "")
-	sink := gst.ElementFactoryMake("autovideosink", "")
-	compositor := gst.ElementFactoryMake("compositor", "")
-	queue := gst.ElementFactoryMake("queue", "")
-	// videotestsrc := gst.ElementFactoryMake("videotestsrc", "")
-
-	// Add the elements to the pipeline and link them
-	pipeline.AddMany(textrender, conv, sink, compositor, queue, src)
-	gst.LinkMany(src, textrender, conv, compositor, sink)
-
-	caps := gst.CapsFromString("text/x-raw, format=(string)pango-markup")
-
-	fmt.Println("Caps:", caps.String())
-
-	src.SetObjectProperty("caps", caps)
-	src.SetObjectProperty("format", gst.FormatTime)
-	src.SetObjectProperty("is-live", true)
+	p := gpipeline.New()
 
 	// Initialize a frame counter
 	var i int
@@ -55,18 +34,13 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	// this handler will be called (on average) twice per second.
 
 	var data []byte
-	src.ConnectEnoughData(func(src gstapp.AppSrc) {
-		log.Println("Enough data!")
-	})
-	src.ConnectNeedData(func(self gstapp.AppSrc, _ uint) {
-
-		log.Println("connecting need data")
+	p.Src.ConnectNeedData(func(self gstapp.AppSrc, _ uint) {
 		select {
 		case textData := <-dataSrc:
 			data = textData
 		default:
 			if data == nil {
-				data = []byte("Hello there :)")
+				data = []byte("<span font=\"100\">Hello there :)</span>")
 			}
 		}
 
@@ -75,6 +49,8 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 
 		// For each frame we produce, we set the timestamp when it should be displayed
 		// The autovideosink will use this information to display the frame at the right time.
+		buffer.SetPTS(p.Src.GetClock().GetTime() - p.Pipeline.GetBaseTime())
+		buffer.SetDuration(gst.ClockTime(time.Millisecond))
 
 		// At this point, buffer is only a reference to an existing memory region somewhere.
 		// When we want to access its content, we have to map it while requesting the required
@@ -98,7 +74,7 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 		i++
 	})
 
-	return pipeline, nil
+	return p.Pipeline, nil
 }
 
 func mainLoop(pipeline gst.Pipeline) error {
@@ -131,13 +107,13 @@ func main() {
 }
 
 func run() {
-	audioDataChan, err := audio.StartRecordingDefaultInput()
+	// audioDataChan, err := audio.StartRecordingDefaultInput()
 
-	if err != nil {
-		log.Fatalf("Error when starting audio: %v", err)
-	}
+	// if err != nil {
+	// 	log.Fatalf("Error when starting audio: %v", err)
+	// }
 
-	sender, stream := aws.StartStream()
+	_, stream := aws.StartStream()
 	results := stream.Events()
 	defer stream.Close()
 	rawText := make(chan []byte)
@@ -156,22 +132,22 @@ func run() {
 		}
 	}()
 
-outer:
+	// outer:
 	for {
 		select {
-		case rawAudioData, ok := <-audioDataChan:
-			if !ok {
-				break outer
-			}
-			err := sender(rawAudioData)
-			if err != nil {
-				log.Printf("Error when sending audio data to aws: %v", err)
-				break outer
-			}
+		// case rawAudioData, ok := <-audioDataChan:
+		// 	if !ok {
+		// 		break outer
+		// 	}
+		// 	err := sender(rawAudioData)
+		// 	if err != nil {
+		// 		log.Printf("Error when sending audio data to aws: %v", err)
+		// 		break outer
+		// 	}
 		case transcriptionResult := <-results:
 			transcript := aws.GetTranscript(transcriptionResult)
 			if transcript != nil {
-				rawText <- []byte(*transcript)
+				rawText <- []byte("<span font=\"50\">" + *transcript + "</span>")
 			}
 		}
 	}
