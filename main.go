@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/go-gst/go-gst/pkg/gst"
@@ -131,7 +132,11 @@ outer:
 			log.Printf("%+v", transcriptionResult)
 			transcript := aws.GetTranscript(transcriptionResult)
 			if transcript != nil {
-				rawText <- []byte("<span font=\"50\">" + *transcript + "</span>")
+				words := strings.Split(*transcript, " ")
+				for _, word := range words {
+					rawText <- []byte("<span font=\"50\">" + word + "</span>")
+					time.Sleep(time.Millisecond * 200)
+				}
 			}
 		}
 	}
