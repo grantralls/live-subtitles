@@ -16,9 +16,7 @@ import (
 	"github.com/grantralls/live-transcription/gpipeline"
 )
 
-func srcNeedData(dataSrc <-chan []byte) func(gstapp.AppSrc, uint) {
-
-	var data []byte
+func srcNeedData(dataSrc <-chan []byte, data []byte, p *gpipeline.Pipeline) func(gstapp.AppSrc, uint) {
 	return func(self gstapp.AppSrc, _ uint) {
 		select {
 		case textData := <-dataSrc:
@@ -71,7 +69,7 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	// this handler will be called (on average) twice per second.
 
 	var data []byte
-	p.Src.ConnectNeedData(srcNeedData)
+	p.Src.ConnectNeedData(srcNeedData(dataSrc, data, p))
 
 	return p.Pipeline, nil
 }
