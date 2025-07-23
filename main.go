@@ -16,27 +16,10 @@ import (
 	"github.com/grantralls/live-transcription/gpipeline"
 )
 
-const width = 320
-const height = 240
-
-func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
-	println("Creating pipeline")
-	gst.Init()
-
-	p := gpipeline.New()
-
-	// Initialize a frame counter
-	var i int
-
-	// Since our appsrc element operates in pull mode (it asks us to provide data),
-	// we add a handler for the need-data callback and provide new data from there.
-	// In our case, we told gstreamer that we do 2 frames per second. While the
-	// buffers of all elements of the pipeline are still empty, this will be called
-	// a couple of times until all of them are filled. After this initial period,
-	// this handler will be called (on average) twice per second.
+func srcNeedData(dataSrc <-chan []byte) func(gstapp.AppSrc, uint) {
 
 	var data []byte
-	p.Src.ConnectNeedData(func(self gstapp.AppSrc, _ uint) {
+	return func(self gstapp.AppSrc, _ uint) {
 		select {
 		case textData := <-dataSrc:
 			data = textData
@@ -51,7 +34,7 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 
 		// For each frame we produce, we set the timestamp when it should be displayed
 		// The autovideosink will use this information to display the frame at the right time.
-		buffer.SetPTS(p.Src.GetClock().GetTime() - p.Pipeline.GetBaseTime())
+		buffer.SetPTS(self.GetClock().GetTime() - p.Pipeline.GetBaseTime())
 		buffer.SetDuration(gst.ClockTime(time.Millisecond))
 
 		// At this point, buffer is only a reference to an existing memory region somewhere.
@@ -65,16 +48,30 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 		_, err := mapped.Write(data)
 		if err != nil {
 			println("Failed to write to buffer:", err)
-			panic("Failed to write to buffer")
 		}
 
 		mapped.Unmap()
 
 		// Push the buffer onto the pipeline.
 		self.PushBuffer(buffer)
+	}
 
-		i++
-	})
+}
+
+func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
+	gst.Init()
+
+	p := gpipeline.New()
+
+	// Since our appsrc element operates in pull mode (it asks us to provide data),
+	// we add a handler for the need-data callback and provide new data from there.
+	// In our case, we told gstreamer that we do 2 frames per second. While the
+	// buffers of all elements of the pipeline are still empty, this will be called
+	// a couple of times until all of them are filled. After this initial period,
+	// this handler will be called (on average) twice per second.
+
+	var data []byte
+	p.Src.ConnectNeedData(srcNeedData)
 
 	return p.Pipeline, nil
 }
