@@ -47,7 +47,9 @@ func GetTranscript(transcriptionResult types.TranscriptResultStream) *string {
 
 	transcript := transcriptResult.Value.Transcript
 	if len(transcript.Results) > 0 && len(transcript.Results[0].Alternatives) > 0 {
-		return transcript.Results[0].Alternatives[0].Transcript
+		if !transcript.Results[0].IsPartial {
+			return transcript.Results[0].Alternatives[0].Transcript
+		}
 	}
 
 	return nil

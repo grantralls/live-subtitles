@@ -16,6 +16,7 @@ const (
 	FRAMES_PER_BUFFER = OneHundrdMilliS / 1000 * SAMPLE_RATE
 )
 
+// Returns a channel that sends a stream of audio bytes
 func StartRecordingDefaultInput() (<-chan []byte, error) {
 	// Initialize PortAudio
 	if err := portaudio.Initialize(); err != nil {

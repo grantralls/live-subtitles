@@ -53,20 +53,12 @@ func srcNeedData(dataSrc <-chan []byte, data []byte, p *gpipeline.Pipeline) func
 		// Push the buffer onto the pipeline.
 		self.PushBuffer(buffer)
 	}
-
 }
 
 func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 	gst.Init()
 
 	p := gpipeline.New()
-
-	// Since our appsrc element operates in pull mode (it asks us to provide data),
-	// we add a handler for the need-data callback and provide new data from there.
-	// In our case, we told gstreamer that we do 2 frames per second. While the
-	// buffers of all elements of the pipeline are still empty, this will be called
-	// a couple of times until all of them are filled. After this initial period,
-	// this handler will be called (on average) twice per second.
 
 	var data []byte
 	p.Src.ConnectNeedData(srcNeedData(dataSrc, data, p))
@@ -75,8 +67,6 @@ func createPipeline(dataSrc <-chan []byte) (gst.Pipeline, error) {
 }
 
 func mainLoop(pipeline gst.Pipeline) error {
-	// Start the pipeline
-
 	pipeline.SetState(gst.StatePlaying)
 
 	for msg := range pipeline.GetBus().Messages(context.Background()) {
@@ -100,10 +90,6 @@ func mainLoop(pipeline gst.Pipeline) error {
 }
 
 func main() {
-	run()
-}
-
-func run() {
 	audioDataChan, err := audio.StartRecordingDefaultInput()
 
 	if err != nil {
@@ -142,6 +128,7 @@ outer:
 				break outer
 			}
 		case transcriptionResult := <-results:
+			log.Printf("%+v", transcriptionResult)
 			transcript := aws.GetTranscript(transcriptionResult)
 			if transcript != nil {
 				rawText <- []byte("<span font=\"50\">" + *transcript + "</span>")
