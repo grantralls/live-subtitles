@@ -1,3 +1,9 @@
-live-transcription
-node_modules
-.docusaurus
+CMakeFiles
+.cache
+commands.md
+
+# CMake
+cmake_install.cmake
+CMakeCache.txt
+compile_commands.json
+Makefile
